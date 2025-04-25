@@ -2,34 +2,13 @@
 pub(crate) use self::inner::AllocError;
 pub(crate) use self::inner::{do_alloc, Allocator, Global};
 
-// Nightly-case.
-// Use unstable `allocator_api` feature.
-// This is compatible with `allocator-api2` which can be enabled or not.
-// This is used when building for `std`.
-#[cfg(feature = "nightly")]
-mod inner {
-    #[cfg(test)]
-    pub use crate::alloc::alloc::AllocError;
-    use crate::alloc::alloc::Layout;
-    pub use crate::alloc::alloc::{Allocator, Global};
-    use core::ptr::NonNull;
-
-    #[allow(clippy::map_err_ignore)]
-    pub(crate) fn do_alloc<A: Allocator>(alloc: &A, layout: Layout) -> Result<NonNull<u8>, ()> {
-        match alloc.allocate(layout) {
-            Ok(ptr) => Ok(ptr.as_non_null_ptr()),
-            Err(_) => Err(()),
-        }
-    }
-}
-
 // Basic non-nightly case.
 // This uses `allocator-api2` enabled by default.
 // If any crate enables "nightly" in `allocator-api2`,
 // this will be equivalent to the nightly case,
 // since `allocator_api2::alloc::Allocator` would be re-export of
 // `core::alloc::Allocator`.
-#[cfg(all(not(feature = "nightly"), feature = "allocator-api2"))]
+#[cfg(feature = "allocator-api2")]
 mod inner {
     use crate::alloc::alloc::Layout;
     #[cfg(test)]
@@ -54,7 +33,7 @@ mod inner {
 // in this crate.
 // Any crate in build-tree can enable `allocator-api2`,
 // or `nightly` without disturbing users that don't want to use it.
-#[cfg(not(any(feature = "nightly", feature = "allocator-api2")))]
+#[cfg(not(feature = "allocator-api2"))]
 mod inner {
     use crate::alloc::alloc::{alloc, dealloc, Layout};
     use core::ptr::NonNull;

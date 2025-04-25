@@ -235,7 +235,6 @@ where
     move |x| k.equivalent(x)
 }
 
-#[cfg(not(feature = "nightly"))]
 #[cfg_attr(feature = "inline-more", inline)]
 pub(crate) fn make_hash<Q, S>(hash_builder: &S, val: &Q) -> u64
 where
@@ -246,16 +245,6 @@ where
     let mut state = hash_builder.build_hasher();
     val.hash(&mut state);
     state.finish()
-}
-
-#[cfg(feature = "nightly")]
-#[cfg_attr(feature = "inline-more", inline)]
-pub(crate) fn make_hash<Q, S>(hash_builder: &S, val: &Q) -> u64
-where
-    Q: Hash + ?Sized,
-    S: BuildHasher,
-{
-    hash_builder.hash_one(val)
 }
 
 #[cfg(feature = "default-hasher")]
@@ -453,7 +442,6 @@ impl<K, V, S> HashMap<K, V, S> {
     /// map.insert(1, 2);
     /// ```
     #[cfg_attr(feature = "inline-more", inline)]
-    #[cfg_attr(feature = "rustc-dep-of-std", rustc_const_stable_indirect)]
     pub const fn with_hasher(hash_builder: S) -> Self {
         Self {
             hash_builder,
@@ -539,7 +527,6 @@ impl<K, V, S, A: Allocator> HashMap<K, V, S, A> {
     /// map.insert(1, 2);
     /// ```
     #[cfg_attr(feature = "inline-more", inline)]
-    #[cfg_attr(feature = "rustc-dep-of-std", rustc_const_stable_indirect)]
     pub const fn with_hasher_in(hash_builder: S, alloc: A) -> Self {
         Self {
             hash_builder,
@@ -4497,27 +4484,6 @@ where
             self.insert(k, v);
         });
     }
-
-    #[inline]
-    #[cfg(feature = "nightly")]
-    fn extend_one(&mut self, (k, v): (K, V)) {
-        self.insert(k, v);
-    }
-
-    #[inline]
-    #[cfg(feature = "nightly")]
-    fn extend_reserve(&mut self, additional: usize) {
-        // Keys may be already present or show multiple times in the iterator.
-        // Reserve the entire hint lower bound if the map is empty.
-        // Otherwise reserve half the hint (rounded up), so the map
-        // will only resize twice in the worst case.
-        let reserve = if self.is_empty() {
-            additional
-        } else {
-            (additional + 1) / 2
-        };
-        self.reserve(reserve);
-    }
 }
 
 /// Inserts all new key-values from the iterator and replaces values with existing
@@ -4571,18 +4537,6 @@ where
     fn extend<T: IntoIterator<Item = (&'a K, &'a V)>>(&mut self, iter: T) {
         self.extend(iter.into_iter().map(|(&key, &value)| (key, value)));
     }
-
-    #[inline]
-    #[cfg(feature = "nightly")]
-    fn extend_one(&mut self, (k, v): (&'a K, &'a V)) {
-        self.insert(*k, *v);
-    }
-
-    #[inline]
-    #[cfg(feature = "nightly")]
-    fn extend_reserve(&mut self, additional: usize) {
-        Extend::<(K, V)>::extend_reserve(self, additional);
-    }
 }
 
 /// Inserts all new key-values from the iterator and replaces values with existing
@@ -4630,18 +4584,6 @@ where
     #[cfg_attr(feature = "inline-more", inline)]
     fn extend<T: IntoIterator<Item = &'a (K, V)>>(&mut self, iter: T) {
         self.extend(iter.into_iter().map(|&(key, value)| (key, value)));
-    }
-
-    #[inline]
-    #[cfg(feature = "nightly")]
-    fn extend_one(&mut self, &(k, v): &'a (K, V)) {
-        self.insert(k, v);
-    }
-
-    #[inline]
-    #[cfg(feature = "nightly")]
-    fn extend_reserve(&mut self, additional: usize) {
-        Extend::<(K, V)>::extend_reserve(self, additional);
     }
 }
 

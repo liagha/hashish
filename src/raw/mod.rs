@@ -615,7 +615,6 @@ impl<T> RawTable<T, Global> {
     /// leave the data pointer dangling since that bucket is never written to
     /// due to our load factor forcing us to always have at least 1 free bucket.
     #[inline]
-    #[cfg_attr(feature = "rustc-dep-of-std", rustc_const_stable_indirect)]
     pub const fn new() -> Self {
         Self {
             table: RawTableInner::NEW,
@@ -641,7 +640,6 @@ impl<T, A: Allocator> RawTable<T, A> {
     /// leave the data pointer dangling since that bucket is never written to
     /// due to our load factor forcing us to always have at least 1 free bucket.
     #[inline]
-    #[cfg_attr(feature = "rustc-dep-of-std", rustc_const_stable_indirect)]
     pub const fn new_in(alloc: A) -> Self {
         Self {
             table: RawTableInner::NEW,
@@ -716,13 +714,6 @@ impl<T, A: Allocator> RawTable<T, A> {
         // P.S. `h1(hash) & self.bucket_mask` is the same as `hash as usize % self.buckets()` because the number
         // of buckets is a power of two, and `self.bucket_mask = self.buckets() - 1`.
         self.table.ctrl.cast()
-    }
-
-    /// Returns pointer to start of data table.
-    #[inline]
-    #[cfg(feature = "nightly")]
-    pub unsafe fn data_start(&self) -> NonNull<T> {
-        NonNull::new_unchecked(self.data_end().as_ptr().wrapping_sub(self.buckets()))
     }
 
     /// Returns the total amount of memory allocated internally by the hash
@@ -3263,24 +3254,6 @@ impl<T: Clone, A: Allocator + Clone> RawTableClone for RawTable<T, A> {
         }
     }
 }
-#[cfg(feature = "nightly")]
-impl<T: Copy, A: Allocator + Clone> RawTableClone for RawTable<T, A> {
-    #[cfg_attr(feature = "inline-more", inline)]
-    unsafe fn clone_from_spec(&mut self, source: &Self) {
-        source
-            .table
-            .ctrl(0)
-            .copy_to_nonoverlapping(self.table.ctrl(0), self.table.num_ctrl_bytes());
-        source
-            .data_start()
-            .as_ptr()
-            .copy_to_nonoverlapping(self.data_start().as_ptr(), self.table.buckets());
-
-        self.table.items = source.table.items;
-        self.table.growth_left = source.table.growth_left;
-    }
-}
-
 impl<T: Clone, A: Allocator + Clone> RawTable<T, A> {
     /// Common code for `clone` and `clone_from`. Assumes:
     /// - `self.buckets() == source.buckets()`.
@@ -3331,24 +3304,6 @@ impl<T, A: Allocator + Default> Default for RawTable<T, A> {
     }
 }
 
-#[cfg(feature = "nightly")]
-unsafe impl<#[may_dangle] T, A: Allocator> Drop for RawTable<T, A> {
-    #[cfg_attr(feature = "inline-more", inline)]
-    fn drop(&mut self) {
-        unsafe {
-            // SAFETY:
-            // 1. We call the function only once;
-            // 2. We know for sure that `alloc` and `table_layout` matches the [`Allocator`]
-            //    and [`TableLayout`] that were used to allocate this table.
-            // 3. If the drop function of any elements fails, then only a memory leak will occur,
-            //    and we don't care because we are inside the `Drop` function of the `RawTable`,
-            //    so there won't be any table left in an inconsistent state.
-            self.table
-                .drop_inner_table::<T, _>(&self.alloc, Self::TABLE_LAYOUT);
-        }
-    }
-}
-#[cfg(not(feature = "nightly"))]
 impl<T, A: Allocator> Drop for RawTable<T, A> {
     #[cfg_attr(feature = "inline-more", inline)]
     fn drop(&mut self) {
@@ -3441,50 +3396,6 @@ impl<T> RawIterRange<T> {
             data,
             next_ctrl,
             end,
-        }
-    }
-
-    /// Splits a `RawIterRange` into two halves.
-    ///
-    /// Returns `None` if the remaining range is smaller than or equal to the
-    /// group width.
-    #[cfg_attr(feature = "inline-more", inline)]
-    #[cfg(feature = "rayon")]
-    pub(crate) fn split(mut self) -> (Self, Option<RawIterRange<T>>) {
-        unsafe {
-            if self.end <= self.next_ctrl {
-                // Nothing to split if the group that we are current processing
-                // is the last one.
-                (self, None)
-            } else {
-                // len is the remaining number of elements after the group that
-                // we are currently processing. It must be a multiple of the
-                // group size (small tables are caught by the check above).
-                let len = offset_from(self.end, self.next_ctrl);
-                debug_assert_eq!(len % Group::WIDTH, 0);
-
-                // Split the remaining elements into two halves, but round the
-                // midpoint down in case there is an odd number of groups
-                // remaining. This ensures that:
-                // - The tail is at least 1 group long.
-                // - The split is roughly even considering we still have the
-                //   current group to process.
-                let mid = (len / 2) & !(Group::WIDTH - 1);
-
-                let tail = Self::new(
-                    self.next_ctrl.add(mid),
-                    self.data.next_n(Group::WIDTH).next_n(mid),
-                    len - mid,
-                );
-                debug_assert_eq!(
-                    self.data.next_n(Group::WIDTH).next_n(mid).ptr,
-                    tail.data.ptr
-                );
-                debug_assert_eq!(self.end, tail.end);
-                self.end = self.next_ctrl.add(mid);
-                debug_assert_eq!(self.end.add(Group::WIDTH), tail.next_ctrl);
-                (self, Some(tail))
-            }
         }
     }
 
@@ -3871,22 +3782,6 @@ where
 {
 }
 
-#[cfg(feature = "nightly")]
-unsafe impl<#[may_dangle] T, A: Allocator> Drop for RawIntoIter<T, A> {
-    #[cfg_attr(feature = "inline-more", inline)]
-    fn drop(&mut self) {
-        unsafe {
-            // Drop all remaining elements
-            self.iter.drop_elements();
-
-            // Free the table
-            if let Some((ptr, layout, ref alloc)) = self.allocation {
-                alloc.deallocate(ptr, layout);
-            }
-        }
-    }
-}
-#[cfg(not(feature = "nightly"))]
 impl<T, A: Allocator> Drop for RawIntoIter<T, A> {
     #[cfg_attr(feature = "inline-more", inline)]
     fn drop(&mut self) {
