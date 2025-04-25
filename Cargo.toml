@@ -1,6 +1,6 @@
 [package]
-name = "hashbrown"
-version = "0.15.2"
+name = "hashish"
+version = "0.0.1"
 authors = ["Amanieu d'Antras <amanieu@gmail.com>"]
 description = " A spicy fork of hashbrown. Fast hash maps with vibes. 🌿 "
 license = "MIT OR Apache-2.0"

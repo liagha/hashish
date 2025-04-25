@@ -6,6 +6,8 @@
 
 Think of it as the same hash table core that powers Rust’s standard `HashMap`, but now with room to tinker, explore new ideas, or just enjoy the vibes.
 
+#### To help with reading it correctly, think of it as hash-ish (pronounced hash-ihsh). The name reflects both the concept of hashing (as in hash maps and sets) and a bit of a chill vibe — a fun, laid-back approach to a powerful data structure.
+
 ---
 
 ## 🚀 Features
